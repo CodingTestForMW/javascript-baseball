@@ -1,53 +1,101 @@
+const MissionUtils = require('@woowacourse/mission-utils');
+const { Console, Random } = MissionUtils;
+
 class App {
-  /**
-   * 게임을 시작합니다.
-   */
-  async play() {
-    console.log("숫자 야구 게임을 시작합니다.");
+  play() {
+    Console.print('숫자 야구 게임을 시작합니다.');
+    return this.startGame(); // Promise 반환
+  }
 
-    this.computerNumbers = this.generateRandomNumbers(); // 컴퓨터 번호 생성
-
-    while (true) {
-      try{
-        const userInput = prompt("숫자를 입력해주세요 (서로 다른 3자리 숫자):"); // 유저 인풋
-
-
-      }catch(err){
-        console.error(err.message);
-      }
+  async startGame() {
+    const computerNumbers = this.generateComputerNumbers();
+    try {
+      await this.askUserInput(computerNumbers);
+    } catch (error) {
+      return Promise.reject(error); // Promise로 예외 전달
     }
   }
 
-  /**
-   * 서로 다른 1~9 사이의 임의의 숫자 3개를 생성합니다.
-   */
-  generateRandomNumbers() {
+  generateComputerNumbers() {
     const numbers = [];
     while (numbers.length < 3) {
-      const randomNum = Math.floor(Math.random() * 9) + 1;
-      if (!numbers.includes(randomNum)) {
-        numbers.push(randomNum);
+      const number = Random.pickNumberInRange(1, 9);
+      if (!numbers.includes(number)) {
+        numbers.push(number);
       }
     }
     return numbers;
   }
 
-  /**
-   * 사용자 입력 검증
-   */
-  userValidation(userInput) {
-    if (!/^\d{3}$/.test(input)) { // 3자리 숫자가 아닌 경우
-      throw new Error("3자리 숫자를 입력해주세요."); // 에러 던지기
-    }
+  async askUserInput(computerNumbers) {
+    return new Promise((resolve, reject) => {
+      Console.readLineAsync('숫자를 입력해주세요 : ', (input) => {
+        try {
+          this.validateInput(input);
+          const result = this.calculateResult(computerNumbers, input);
+          Console.print(result);
 
-    /**
-     * 서로 다른 숫자 검증
-     */
-    const digits = input.split(""); // 배열로 변환
-    if (new Set(digits).size !== 3) { // 중복된 숫자가 있는 경우
-      throw new Error("서로 다른 숫자를 입력해야 합니다."); // 에러 던지기
+          if (result.includes('3스트라이크')) {
+            Console.print('3개의 숫자를 모두 맞히셨습니다! 게임 종료');
+            return this.askRestart().then(resolve).catch(reject);
+          } else {
+            this.askUserInput(computerNumbers).then(resolve).catch(reject);
+          }
+        } catch (error) {
+          reject(error); // 비동기에서 예외 처리
+        }
+      });
+    });
+  }
+
+   validateInput(input) {
+    if (!/^\d{3}$/.test(input)) {
+      throw new Error('[ERROR] 입력값은 3자리의 숫자여야 합니다.');
     }
+    const digits = input.split('');
+    if (new Set(digits).size !== digits.length) {
+      throw new Error('[ERROR] 입력값에 중복된 숫자가 있습니다.');
+    }
+  }
+
+  calculateResult(computerNumbers, userInput) {
+    const userNumbers = userInput.split('').map(Number);
+    let strikes = 0;
+    let balls = 0;
+
+    userNumbers.forEach((num, index) => {
+      if (num === computerNumbers[index]) {
+        strikes += 1;
+      } else if (computerNumbers.includes(num)) {
+        balls += 1;
+      }
+    });
+
+    if (strikes === 0 && balls === 0) {
+      return '낫싱';
+    }
+    return `${balls ? `${balls}볼 ` : ''}${strikes ? `${strikes}스트라이크` : ''}`.trim();
+  }
+
+  askRestart() {
+    return new Promise((resolve, reject) => {
+      Console.readLineAsync('게임을 새로 시작하려면 1, 종료하려면 2를 입력하세요.', (input) => {
+        try {
+          if (input === '1') {
+            this.startGame().then(resolve).catch(reject);
+          } else if (input === '2') {
+            Console.print('게임을 종료합니다.');
+            Console.close();
+            resolve(); // 종료 시 Promise 성공적으로 종료
+          } else {
+            throw new Error('[ERROR] 잘못된 입력입니다. 1 또는 2를 입력하세요.');
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
   }
 }
 
-export default App;
+module.exports = App;
